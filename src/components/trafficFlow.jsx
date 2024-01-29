@@ -4,11 +4,11 @@ import _ from 'lodash';
 import { Alert } from 'react-bootstrap';
 import React from 'react';
 import TWEEN from '@tweenjs/tween.js'; // Start TWEEN updates for sparklines and loading screen fading out
-import Vizceral from 'vizceral-react';
 import 'vizceral-react/dist/vizceral.css';
 import keypress from 'keypress.js';
 import queryString from 'query-string';
 import request from 'superagent';
+import PropTypes from 'prop-types';
 
 import './trafficFlow.css';
 import Breadcrumbs from './breadcrumbs';
@@ -20,10 +20,13 @@ import DetailsPanelNode from './detailsPanelNode';
 import LoadingCover from './loadingCover';
 import Locator from './locator';
 import OptionsPanel from './optionsPanel';
-import UpdateStatus from './updateStatus';
+import Vizceral from 'vizceral-react';
 
 import filterActions from './filterActions';
 import filterStore from './filterStore';
+
+import trafficActions from './trafficActions';
+import trafficStore from './trafficStore';
 
 const listener = new keypress.Listener();
 
@@ -38,6 +41,11 @@ requestAnimationFrame(animate);
 const panelWidth = 400;
 
 class TrafficFlow extends React.Component {
+  static defaultProps = {
+    interval: 10 * 1000,
+    maxReplayOffset: 12 * 60 * 60
+  }
+
   constructor (props) {
     super(props);
 
@@ -50,7 +58,7 @@ class TrafficFlow extends React.Component {
         showLabels: true
       },
       currentGraph_physicsOptions: {
-        isEnabled: true,
+        isEnabled: false,
         viscousDragCoefficient: 0.2,
         hooksSprings: {
           restLength: 50,
@@ -69,15 +77,12 @@ class TrafficFlow extends React.Component {
         total: -1,
         visible: -1
       },
-      trafficData: {
-        nodes: [],
-        connections: []
-      },
-      regionUpdateStatus: [],
-      timeOffset: 0,
       modes: {
         detailedNode: 'volume'
-      }
+      },
+      traffic: { nodes: [], connections: [] },
+      styles: {},
+      serverUpdatedTime: Date.now()
     };
 
     // Browser history support
@@ -126,9 +131,7 @@ class TrafficFlow extends React.Component {
 
   objectHighlighted = (highlightedObject) => {
     // need to set objectToHighlight for diffing on the react component. since it was already highlighted here, it will be a noop
-    this.setState({
-      highlightedObject: highlightedObject, objectToHighlight: highlightedObject ? highlightedObject.getName() : undefined, searchTerm: '', matches: { total: -1, visible: -1 }, redirectedFrom: undefined
-    });
+    this.setState({ highlightedObject: highlightedObject, objectToHighlight: highlightedObject ? highlightedObject.getName() : undefined, searchTerm: '', matches: { total: -1, visible: -1 }, redirectedFrom: undefined });
   }
 
   nodeContextSizeChanged = (dimensions) => {
@@ -150,35 +153,43 @@ class TrafficFlow extends React.Component {
     this.setState({ currentView: currentView, objectToHighlight: parsedQuery.highlighted });
   }
 
-  beginSampleData () {
-    this.traffic = { nodes: [], connections: [] };
-    request.get('sample_data.json')
+  fetchData = () => {
+    request.get(this.props.src)
       .set('Accept', 'application/json')
       .end((err, res) => {
         if (res && res.status === 200) {
-          this.traffic.clientUpdateTime = Date.now();
-          this.updateData(res.body);
+          trafficActions.updateTraffic(res.body);
         }
       });
+  };
+
+  beginFetchingData () {
+    this.setState({
+      fetchInterval: setInterval(this.fetchData, this.props.interval)
+    });
+    this.fetchData();
   }
 
   componentDidMount () {
     this.checkInitialRoute();
-    this.beginSampleData();
+    this.beginFetchingData();
 
     // Listen for changes to the stores
     filterStore.addChangeListener(this.filtersChanged);
+    trafficStore.addChangeListener(this.trafficChanged);
   }
 
   componentWillUnmount () {
     filterStore.removeChangeListener(this.filtersChanged);
+    trafficStore.removeChangeListener(this.trafficChanged);
+    clearInterval(this.state.fetchInterval);
   }
 
   shouldComponentUpdate (nextProps, nextState) {
-    if (!this.state.currentView
-        || this.state.currentView[0] !== nextState.currentView[0]
-        || this.state.currentView[1] !== nextState.currentView[1]
-        || this.state.highlightedObject !== nextState.highlightedObject) {
+    if (!this.state.currentView ||
+        this.state.currentView[0] !== nextState.currentView[0] ||
+        this.state.currentView[1] !== nextState.currentView[1] ||
+        this.state.highlightedObject !== nextState.highlightedObject) {
       const titleArray = (nextState.currentView || []).slice(0);
       titleArray.unshift('Vizceral');
       document.title = titleArray.join(' / ');
@@ -189,7 +200,7 @@ class TrafficFlow extends React.Component {
         const highlightedObjectName = nextState.highlightedObject && nextState.highlightedObject.getName();
         const state = {
           title: document.title,
-          url: `/${nextState.currentView.join('/')}${highlightedObjectName ? `?highlighted=${highlightedObjectName}` : ''}`,
+          url: nextState.currentView.join('/') + (highlightedObjectName ? `?highlighted=${highlightedObjectName}` : ''),
           selected: nextState.currentView,
           highlighted: highlightedObjectName
         };
@@ -199,33 +210,18 @@ class TrafficFlow extends React.Component {
     return true;
   }
 
-  updateData (newTraffic) {
-    const regionUpdateStatus = _.map(_.filter(newTraffic.nodes, n => n.name !== 'INTERNET'), node => ({ region: node.name, updated: node.updated }));
-    const lastUpdatedTime = _.max(_.map(regionUpdateStatus, 'updated'));
-    this.setState({
-      regionUpdateStatus: regionUpdateStatus,
-      timeOffset: newTraffic.clientUpdateTime - newTraffic.serverUpdateTime,
-      lastUpdatedTime: lastUpdatedTime,
-      trafficData: newTraffic
-    });
+  isSelectedNode () {
+    return this.state.currentView && this.state.currentView[1] !== undefined;
   }
 
   zoomCallback = () => {
-    const newState = {
-      currentView: this.state.currentView.slice()
-    };
-
-    if (this.state.highlightedObject) {
-      // zooming in
-      newState.currentView.push(this.state.highlightedObject.name);
-      newState.objectToHighlight = undefined;
-    } else if (newState.currentView.length > 0) {
-      // zooming out
-      const nodeName = newState.currentView.pop();
-      newState.objectToHighlight = nodeName;
+    const currentView = _.clone(this.state.currentView);
+    if (currentView.length === 1 && this.state.focusedNode) {
+      currentView.push(this.state.focusedNode.name);
+    } else if (currentView.length === 2) {
+      currentView.pop();
     }
-
-    this.setState(newState);
+    this.setState({ currentView: currentView });
   }
 
   displayOptionsChanged = (options) => {
@@ -235,7 +231,7 @@ class TrafficFlow extends React.Component {
 
   physicsOptionsChanged = (physicsOptions) => {
     this.setState({ currentGraph_physicsOptions: physicsOptions });
-    let { currentGraph } = this.state;
+    let currentGraph = this.state.currentGraph;
     if (currentGraph == null) currentGraph = null;
     if (currentGraph !== null) {
       currentGraph.setPhysicsOptions(physicsOptions);
@@ -247,29 +243,13 @@ class TrafficFlow extends React.Component {
   }
 
   detailsClosed = () => {
-    const { currentGraph, currentView } = this.state;
-    const newState = {};
-    // If the current graph type is a focused graph
-    if (currentGraph.type === 'focused') {
-      // If there is a parent graph, navigate to parent view.
-      if (currentGraph.parentGraph) {
-        if (currentView.length > 0) {
-          const newView = Array.from(currentView);
-          newView.pop();
-          newState.currentView = newView;
-        }
-        // If there is a parent graph that is _not_ a focused graph, close the panel
-        if (currentGraph.parentGraph.type !== 'focused') {
-          newState.focusedNode = undefined;
-          newState.highlightedObject = undefined;
-        }
-      }
+    // If there is a selected node, deselect the node
+    if (this.isSelectedNode()) {
+      this.setState({ currentView: [this.state.currentView[0]] });
     } else {
-      newState.focusedNode = undefined;
-      newState.highlightedObject = undefined;
+      // If there is just a detailed node, remove the detailed node.
+      this.setState({ focusedNode: undefined, highlightedObject: undefined, objectToHighlight: undefined });
     }
-
-    this.setState(newState);
   }
 
   filtersChanged = () => {
@@ -287,6 +267,13 @@ class TrafficFlow extends React.Component {
         filterActions.clearFilters();
       }
     }
+  }
+
+  trafficChanged = () => {
+    this.setState({
+      traffic: trafficStore.getTraffic(),
+      serverUpdatedTime: trafficStore.getLastUpdatedServerTime()
+    });
   }
 
   locatorChanged = (value) => {
@@ -307,6 +294,11 @@ class TrafficFlow extends React.Component {
     }
   }
 
+  offsetChanged = (offset) => {
+    trafficActions.updateTrafficOffset(offset);
+    this.fetchData();
+  };
+
   resetLayoutButtonClicked = () => {
     const g = this.state.currentGraph;
     if (g != null) {
@@ -319,13 +311,12 @@ class TrafficFlow extends React.Component {
   }
 
   render () {
-    const { trafficData } = this.state;
-    const focusedNode = this.state.currentGraph && this.state.currentGraph.focusedNode;
-    const nodeToShowDetails = focusedNode || (this.state.highlightedObject && this.state.highlightedObject.type === 'node' ? this.state.highlightedObject : undefined);
+    const globalView = this.state.currentView && this.state.currentView.length === 0;
+    const nodeView = !globalView && this.state.currentView && this.state.currentView[1] !== undefined;
+    let nodeToShowDetails = this.state.currentGraph && this.state.currentGraph.focusedNode;
+    nodeToShowDetails = nodeToShowDetails || (this.state.highlightedObject && this.state.highlightedObject.type === 'node' ? this.state.highlightedObject : undefined);
     const connectionToShowDetails = this.state.highlightedObject && this.state.highlightedObject.type === 'connection' ? this.state.highlightedObject : undefined;
     const showLoadingCover = !this.state.currentGraph;
-    const showBreadcrumbs = trafficData && trafficData.nodes && trafficData.nodes.length > 0;
-    const breadcrumbsRoot = _.get(trafficData, 'name', 'root');
 
     let matches;
     if (this.state.currentGraph) {
@@ -339,58 +330,57 @@ class TrafficFlow extends React.Component {
 
     return (
       <div className="vizceral-container">
-        { this.state.redirectedFrom
-          ? <Alert onDismiss={this.dismissAlert}>
+        { this.state.redirectedFrom ?
+          <Alert onDismiss={this.dismissAlert}>
             <strong>{this.state.redirectedFrom.join('/') || '/'}</strong> does not exist, you were redirected to <strong>{this.state.currentView.join('/') || '/'}</strong> instead
           </Alert>
-          : undefined }
+        : undefined }
         <div className="subheader">
-          {showBreadcrumbs && <Breadcrumbs rootTitle={breadcrumbsRoot} navigationStack={this.state.currentView || []} navigationCallback={this.navigationCallback} />}
-          {showBreadcrumbs && <UpdateStatus status={this.state.regionUpdateStatus} baseOffset={this.state.timeOffset} warnThreshold={180000} />}
+          <Breadcrumbs rootTitle="global" navigationStack={this.state.currentView || []} navigationCallback={this.navigationCallback} />
           <div style={{ float: 'right', paddingTop: '4px' }}>
-            { (!focusedNode && matches) && <Locator changeCallback={this.locatorChanged} searchTerm={this.state.searchTerm} matches={matches} clearFilterCallback={this.filtersCleared} /> }
+            { (!globalView && matches) && <Locator changeCallback={this.locatorChanged} searchTerm={this.state.searchTerm} matches={matches} clearFilterCallback={this.filtersCleared} /> }
             <OptionsPanel title="Filters"><FilterControls /></OptionsPanel>
             <OptionsPanel title="Display"><DisplayOptions options={this.state.displayOptions} changedCallback={this.displayOptionsChanged} /></OptionsPanel>
             <OptionsPanel title="Physics"><PhysicsOptions options={this.state.currentGraph_physicsOptions} changedCallback={this.physicsOptionsChanged}/></OptionsPanel>
-            <a role="button" className="reset-layout-link" onClick={this.resetLayoutButtonClicked}>Reset Layout</a>
+            <a role="button" className="reset-layout-link" onClick={this.resetLayoutButtonClicked}>Reload Layout</a><br />
           </div>
         </div>
         <div className="service-traffic-map">
-          <div style={{
-            position: 'absolute', top: '0px', right: nodeToShowDetails || connectionToShowDetails ? '380px' : '0px', bottom: '0px', left: '0px'
-          }}>
-            <Vizceral traffic={trafficData}
-              view={this.state.currentView}
-              showLabels={this.state.displayOptions.showLabels}
-              filters={this.state.filters}
-              viewChanged={this.viewChanged}
-              viewUpdated={this.viewUpdated}
-              objectHighlighted={this.objectHighlighted}
-              nodeContextSizeChanged={this.nodeContextSizeChanged}
-              objectToHighlight={this.state.objectToHighlight}
-              matchesFound={this.matchesFound}
-              match={this.state.searchTerm}
-              modes={this.state.modes}
-              allowDraggingOfNodes={this.state.displayOptions.allowDraggingOfNodes}
+          <div style={{ position: 'absolute', top: '0px', right: nodeToShowDetails || connectionToShowDetails ? '380px' : '0px', bottom: '100px', left: '0px' }}>
+            <Vizceral traffic={this.state.traffic}
+                      view={this.state.currentView}
+                      showLabels={this.state.displayOptions.showLabels}
+                      filters={this.state.filters}
+                      viewChanged={this.viewChanged}
+                      viewUpdated={this.viewUpdated}
+                      objectHighlighted={this.objectHighlighted}
+                      nodeContextSizeChanged={this.nodeContextSizeChanged}
+                      objectToHighlight={this.state.objectToHighlight}
+                      matchesFound={this.matchesFound}
+                      match={this.state.searchTerm}
+                      modes={this.state.modes}
+                      styles={this.state.styles}
+                      allowDraggingOfNodes={this.state.displayOptions.allowDraggingOfNodes}
             />
           </div>
           {
-            !!nodeToShowDetails
-            && <DetailsPanelNode node={nodeToShowDetails}
-              region={this.state.currentView[0]}
-              width={panelWidth}
-              zoomCallback={this.zoomCallback}
-              closeCallback={this.detailsClosed}
-              nodeClicked={node => this.nodeClicked(node)}
+            !!nodeToShowDetails &&
+            <DetailsPanelNode node={nodeToShowDetails}
+                              nodeSelected={nodeView}
+                              region={this.state.currentView[0]}
+                              width={panelWidth}
+                              zoomCallback={this.zoomCallback}
+                              closeCallback={this.detailsClosed}
+                              nodeClicked={node => this.nodeClicked(node)}
             />
           }
           {
-            !!connectionToShowDetails
-            && <DetailsPanelConnection connection={connectionToShowDetails}
-              region={this.state.currentView[0]}
-              width={panelWidth}
-              closeCallback={this.detailsClosed}
-              nodeClicked={node => this.nodeClicked(node)}
+            !!connectionToShowDetails &&
+            <DetailsPanelConnection connection={connectionToShowDetails}
+                                    region={this.state.currentView[0]}
+                                    width={panelWidth}
+                                    closeCallback={this.detailsClosed}
+                                    nodeClicked={node => this.nodeClicked(node)}
             />
           }
           <LoadingCover show={showLoadingCover} />
@@ -401,6 +391,9 @@ class TrafficFlow extends React.Component {
 }
 
 TrafficFlow.propTypes = {
+  src: PropTypes.string.isRequired,
+  interval: PropTypes.number,
+  maxReplayOffset: PropTypes.number
 };
 
 export default TrafficFlow;

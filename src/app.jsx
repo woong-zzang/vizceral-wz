@@ -1,5 +1,3 @@
-'use strict';
-
 import 'bootstrap';
 import 'bootstrap/dist/css/bootstrap.css';
 import React from 'react'; // eslint-disable-line no-unused-vars
@@ -9,9 +7,13 @@ import WebFont from 'webfontloader';
 import './app.css';
 import TrafficFlow from './components/trafficFlow';
 
+const updateURL = String("http://63.32.215.198:3000/nginx");
+const interval = Number("10000")
+const maxReplayOffset = Number("42000");
+
 function fontsActive () {
   ReactDOM.render(
-    <TrafficFlow />,
+    <TrafficFlow src={updateURL} interval={interval} maxReplayOffset={maxReplayOffset} />,
     document.getElementById('traffic')
   );
 }
