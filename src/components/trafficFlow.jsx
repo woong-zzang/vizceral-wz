@@ -11,6 +11,7 @@ import request from 'superagent';
 import PropTypes from 'prop-types';
 
 import './trafficFlow.css';
+import Vizceral from 'vizceral-react';
 import Breadcrumbs from './breadcrumbs';
 import DisplayOptions from './displayOptions';
 import PhysicsOptions from './physicsOptions';
@@ -20,7 +21,6 @@ import DetailsPanelNode from './detailsPanelNode';
 import LoadingCover from './loadingCover';
 import Locator from './locator';
 import OptionsPanel from './optionsPanel';
-import Vizceral from 'vizceral-react';
 
 import filterActions from './filterActions';
 import filterStore from './filterStore';
@@ -131,7 +131,9 @@ class TrafficFlow extends React.Component {
 
   objectHighlighted = (highlightedObject) => {
     // need to set objectToHighlight for diffing on the react component. since it was already highlighted here, it will be a noop
-    this.setState({ highlightedObject: highlightedObject, objectToHighlight: highlightedObject ? highlightedObject.getName() : undefined, searchTerm: '', matches: { total: -1, visible: -1 }, redirectedFrom: undefined });
+    this.setState({
+      highlightedObject: highlightedObject, objectToHighlight: highlightedObject ? highlightedObject.getName() : undefined, searchTerm: '', matches: { total: -1, visible: -1 }, redirectedFrom: undefined
+    });
   }
 
   nodeContextSizeChanged = (dimensions) => {
@@ -186,10 +188,10 @@ class TrafficFlow extends React.Component {
   }
 
   shouldComponentUpdate (nextProps, nextState) {
-    if (!this.state.currentView ||
-        this.state.currentView[0] !== nextState.currentView[0] ||
-        this.state.currentView[1] !== nextState.currentView[1] ||
-        this.state.highlightedObject !== nextState.highlightedObject) {
+    if (!this.state.currentView
+        || this.state.currentView[0] !== nextState.currentView[0]
+        || this.state.currentView[1] !== nextState.currentView[1]
+        || this.state.highlightedObject !== nextState.highlightedObject) {
       const titleArray = (nextState.currentView || []).slice(0);
       titleArray.unshift('Vizceral');
       document.title = titleArray.join(' / ');
@@ -231,7 +233,7 @@ class TrafficFlow extends React.Component {
 
   physicsOptionsChanged = (physicsOptions) => {
     this.setState({ currentGraph_physicsOptions: physicsOptions });
-    let currentGraph = this.state.currentGraph;
+    let { currentGraph } = this.state;
     if (currentGraph == null) currentGraph = null;
     if (currentGraph !== null) {
       currentGraph.setPhysicsOptions(physicsOptions);
@@ -330,11 +332,11 @@ class TrafficFlow extends React.Component {
 
     return (
       <div className="vizceral-container">
-        { this.state.redirectedFrom ?
-          <Alert onDismiss={this.dismissAlert}>
+        { this.state.redirectedFrom
+          ? <Alert onDismiss={this.dismissAlert}>
             <strong>{this.state.redirectedFrom.join('/') || '/'}</strong> does not exist, you were redirected to <strong>{this.state.currentView.join('/') || '/'}</strong> instead
           </Alert>
-        : undefined }
+          : undefined }
         <div className="subheader">
           <Breadcrumbs rootTitle="global" navigationStack={this.state.currentView || []} navigationCallback={this.navigationCallback} />
           <div style={{ float: 'right', paddingTop: '4px' }}>
@@ -346,41 +348,43 @@ class TrafficFlow extends React.Component {
           </div>
         </div>
         <div className="service-traffic-map">
-          <div style={{ position: 'absolute', top: '0px', right: nodeToShowDetails || connectionToShowDetails ? '380px' : '0px', bottom: '100px', left: '0px' }}>
+          <div style={{
+            position: 'absolute', top: '0px', right: nodeToShowDetails || connectionToShowDetails ? '380px' : '0px', bottom: '100px', left: '0px'
+          }}>
             <Vizceral traffic={this.state.traffic}
-                      view={this.state.currentView}
-                      showLabels={this.state.displayOptions.showLabels}
-                      filters={this.state.filters}
-                      viewChanged={this.viewChanged}
-                      viewUpdated={this.viewUpdated}
-                      objectHighlighted={this.objectHighlighted}
-                      nodeContextSizeChanged={this.nodeContextSizeChanged}
-                      objectToHighlight={this.state.objectToHighlight}
-                      matchesFound={this.matchesFound}
-                      match={this.state.searchTerm}
-                      modes={this.state.modes}
-                      styles={this.state.styles}
-                      allowDraggingOfNodes={this.state.displayOptions.allowDraggingOfNodes}
+              view={this.state.currentView}
+              showLabels={this.state.displayOptions.showLabels}
+              filters={this.state.filters}
+              viewChanged={this.viewChanged}
+              viewUpdated={this.viewUpdated}
+              objectHighlighted={this.objectHighlighted}
+              nodeContextSizeChanged={this.nodeContextSizeChanged}
+              objectToHighlight={this.state.objectToHighlight}
+              matchesFound={this.matchesFound}
+              match={this.state.searchTerm}
+              modes={this.state.modes}
+              styles={this.state.styles}
+              allowDraggingOfNodes={this.state.displayOptions.allowDraggingOfNodes}
             />
           </div>
           {
-            !!nodeToShowDetails &&
-            <DetailsPanelNode node={nodeToShowDetails}
-                              nodeSelected={nodeView}
-                              region={this.state.currentView[0]}
-                              width={panelWidth}
-                              zoomCallback={this.zoomCallback}
-                              closeCallback={this.detailsClosed}
-                              nodeClicked={node => this.nodeClicked(node)}
+            !!nodeToShowDetails
+            && <DetailsPanelNode node={nodeToShowDetails}
+              nodeSelected={nodeView}
+              region={this.state.currentView[0]}
+              width={panelWidth}
+              zoomCallback={this.zoomCallback}
+              closeCallback={this.detailsClosed}
+              nodeClicked={node => this.nodeClicked(node)}
             />
           }
           {
-            !!connectionToShowDetails &&
-            <DetailsPanelConnection connection={connectionToShowDetails}
-                                    region={this.state.currentView[0]}
-                                    width={panelWidth}
-                                    closeCallback={this.detailsClosed}
-                                    nodeClicked={node => this.nodeClicked(node)}
+            !!connectionToShowDetails
+            && <DetailsPanelConnection connection={connectionToShowDetails}
+              region={this.state.currentView[0]}
+              width={panelWidth}
+              closeCallback={this.detailsClosed}
+              nodeClicked={node => this.nodeClicked(node)}
             />
           }
           <LoadingCover show={showLoadingCover} />
