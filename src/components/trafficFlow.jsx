@@ -155,11 +155,13 @@ class TrafficFlow extends React.Component {
     this.setState({ currentView: currentView, objectToHighlight: parsedQuery.highlighted });
   }
 
+  // app.jsx 에서 받아논 프로퍼티인 src 값에 json 객체 요청
   fetchData = () => {
     request.get(this.props.src)
       .set('Accept', 'application/json')
       .end((err, res) => {
         if (res && res.status === 200) {
+          // trafficActions 호출
           trafficActions.updateTraffic(res.body);
         }
       });

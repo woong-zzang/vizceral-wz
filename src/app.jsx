@@ -7,6 +7,7 @@ import WebFont from 'webfontloader';
 import './app.css';
 import TrafficFlow from './components/trafficFlow';
 
+// trafficFlow.jsx 에 넘겨줄 값 정의
 const updateURL = String('http://63.32.215.198:3000/nginx');
 const interval = Number('10000');
 const maxReplayOffset = Number('42000');
@@ -30,3 +31,4 @@ WebFont.load({
   },
   active: fontsActive
 });
+
