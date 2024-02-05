@@ -31,4 +31,3 @@ WebFont.load({
   },
   active: fontsActive
 });
-
