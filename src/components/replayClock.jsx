@@ -117,7 +117,7 @@ class ReplayClock extends React.Component {
 
 
 ReplayClock.propTypes = {
-  time: React.PropTypes.number.isRequired,
-  maxOffset: React.PropTypes.number.isRequired,
-  offsetChanged: React.PropTypes.func
+  time: PropTypes.number.isRequired,
+  maxOffset: PropTypes.number.isRequired,
+  offsetChanged: PropTypes.func
 };
