@@ -167,6 +167,7 @@ class TrafficFlow extends React.Component {
       });
   };
 
+  // intesrval 단위로 fetchData 함수를 계속 실행
   beginFetchingData () {
     this.setState({
       fetchInterval: setInterval(this.fetchData, this.props.interval)
