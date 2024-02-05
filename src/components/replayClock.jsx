@@ -123,4 +123,4 @@ ReplayClock.propTypes = {
   offsetChanged: PropTypes.func
 };
 
-export default ReplayClock;                  
+export default ReplayClock;
