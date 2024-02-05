@@ -21,6 +21,8 @@ import DetailsPanelNode from './detailsPanelNode';
 import LoadingCover from './loadingCover';
 import Locator from './locator';
 import OptionsPanel from './optionsPanel';
+import ReplayClock from './replayClock';
+
 
 import filterActions from './filterActions';
 import filterStore from './filterStore';
