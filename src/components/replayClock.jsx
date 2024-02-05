@@ -38,7 +38,7 @@ class ReplayClock extends React.Component {
     const inputDate = new Date(this.state.inputValue);
 
     // is valid date
-    if (!inputDate.getTime || Number.isNaN(inputDate.getTime())) {
+    if (!inputDate.getTime || isNaN(inputDate.getTime())) {
       this.setState({
         error: true
       });
