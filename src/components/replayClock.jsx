@@ -122,3 +122,5 @@ ReplayClock.propTypes = {
   maxOffset: PropTypes.number.isRequired,
   offsetChanged: PropTypes.func
 };
+
+export default ReplayClock;                  
