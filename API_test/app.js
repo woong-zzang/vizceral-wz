@@ -2,11 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors'); // cors 미들웨어 추가
 const port = 3000;  // 사용할 포트 번호
-const Vizceral_data = require('./test-OTEL');
-const dice = require('./dice')
-const opentelemetry = require('@opentelemetry/api');
-
-const myMeter = opentelemetry.metrics.getMeter('my-service-meter');
+const Vizceral_data = require('./vizceral');
 
 app.use(cors()); // 모든 요청에 대해 CORS 허용
 
@@ -25,17 +21,6 @@ app.get('/nginx', async (req, res) => {
   const results = await Vizceral_data.Vizceral_data();
   console.log(results)
   res.json(results);
-});
-
-app.get('/roll', async (req, res) => {
-  const rolls = req.query.rolls ? parseInt(req.query.rolls.toString()) : NaN;
-  if (isNaN(rolls)) {
-    res
-      .status(400)
-      .send("Request parameter 'rolls' is missing or not a number.");
-    return;
-  }
-  res.send(JSON.stringify(dice.rollTheDice(rolls, 1, 6)));
 });
 
 // 서버 시작
