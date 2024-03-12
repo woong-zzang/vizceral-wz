@@ -69,7 +69,7 @@ let result_data = {
 
 // 로그 경로 변경 필요
 // const directoryPath = '/home/ec2-user/fluentd/docker_log/';
-const directoryPath = '/Users/woongzzang/study/vizceral/example/docker_log/';
+const directoryPath = './docker_log/';
 
 function Vizceral_data() {
     return new Promise(async (resolve, reject) => {
